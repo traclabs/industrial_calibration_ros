@@ -9,6 +9,9 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <std_srvs/Trigger.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <yaml-cpp/yaml.h>
 
 #include <fstream>
@@ -31,6 +34,7 @@ public:
     , last_image_(nullptr)
     , validate_server_(nh_.advertiseService("validate_pnp", &PnPValidator::validatePnP, this))
     , compute_server_(nh_.advertiseService("compute_pnp", &PnPValidator::computePnP, this))
+    , listener_(buffer_)
   {
     // Configure the plugin loader
     loader_.search_libraries.insert(INDUSTRIAL_CALIBRATION_PLUGIN_LIBRARIES);
@@ -38,18 +42,16 @@ public:
 
     // Load the target finder
     YAML::Node config = YAML::LoadFile(getParameter<std::string>(pnh_, "config_file"));
+    YAML::Node validation = getMember<YAML::Node>(config, "validation");
 
     // Load the target finder
-    YAML::Node target_finder_config = getMember<YAML::Node>(config, "target_finder");
+    YAML::Node target_finder_config = getMember<YAML::Node>(validation, "target_finder");
     factory_ = loader_.createInstance<industrial_calibration::TargetFinderFactoryOpenCV>(
         getMember<std::string>(target_finder_config, "type"));
     target_finder_ = factory_->create(target_finder_config);
 
     // Load the camera intrinsics
-    pnp_.intr = getMember<industrial_calibration::CameraIntrinsics>(config, "intrinsics");
-
-    // Load the known pose of the target
-    pnp_.camera_to_target_guess = getMember<Eigen::Isometry3d>(config, "camera_to_target");
+    pnp_.intr = getMember<industrial_calibration::CameraIntrinsics>(validation, "intrinsics");
   }
 
   void imageCb(const sensor_msgs::ImageConstPtr& msg) { last_image_ = msg; }
@@ -69,6 +71,13 @@ public:
     }
   }
 
+  Eigen::Isometry3d getCameraToTargetTransform()
+  {
+    const auto camera_frame = getParameter<std::string>(pnh_, "camera_frame");
+    const auto target_frame = getParameter<std::string>(pnh_, "target_frame");
+    return tf2::transformToEigen(buffer_.lookupTransform(camera_frame, target_frame, ros::Time(0), ros::Duration(1.0)));
+  }
+
   bool computePnP(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   {
     try
@@ -82,11 +91,15 @@ public:
       pnp_.correspondences = target_finder_->findCorrespondences(cv_ptr->image);
 
       // Perform the PnP optimization
+      pnp_.camera_to_target_guess = getCameraToTargetTransform();
       industrial_calibration::PnPResult pnp_result = industrial_calibration::optimize(pnp_);
       if (!pnp_result.converged) throw std::runtime_error("PnP optimization did not converge");
 
       // Save to file
-      YAML::Node node(pnp_result.camera_to_target);
+      YAML::Node node;
+      node["camera_to_target_pos"] = Eigen::Vector3d(pnp_result.camera_to_target.translation());
+      node["camera_to_target_rpy"] =
+          Eigen::Vector3d(pnp_result.camera_to_target.rotation().eulerAngles(2, 1, 0).reverse());
       {
         std::ofstream f("/tmp/pnp.yaml");
         f << node;
@@ -119,6 +132,7 @@ public:
       pnp_.correspondences = target_finder_->findCorrespondences(cv_ptr->image);
 
       // Perform the PnP optimization
+      pnp_.camera_to_target_guess = getCameraToTargetTransform();
       industrial_calibration::PnPResult pnp_result = industrial_calibration::optimize(pnp_);
       if (!pnp_result.converged) throw std::runtime_error("PnP optimization did not converge");
 
@@ -167,6 +181,8 @@ private:
   sensor_msgs::Image::ConstPtr last_image_;
   ros::ServiceServer compute_server_;
   ros::ServiceServer validate_server_;
+  tf2_ros::Buffer buffer_;
+  tf2_ros::TransformListener listener_;
 
   boost_plugin_loader::PluginLoader loader_;
   industrial_calibration::TargetFinderFactoryOpenCV::Ptr factory_;

@@ -18,7 +18,8 @@
   <depend>yaml-cpp</depend>
   <depend>boost_plugin_loader</depend>
   <depend>industrial_calibration</depend>
-  <exec_depend>tf2_ros</exec_depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_eigen</depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>message_filters</exec_depend>

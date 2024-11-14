@@ -9,7 +9,9 @@ find_package(
              rospy
              image_transport
              sensor_msgs
-             cv_bridge)
+             cv_bridge
+             tf2_eigen
+             tf2_ros)
 
 find_package(yaml-cpp REQUIRED)
 find_package(boost_plugin_loader REQUIRED)
@@ -22,7 +24,9 @@ catkin_package(
   rospy
   sensor_msgs
   cv_bridge
-  image_transport)
+  image_transport
+  tf2_eigen
+  tf2_ros)
 
 # ######################################################################################################################
 # Build ##
