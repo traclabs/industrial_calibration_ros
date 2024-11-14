@@ -95,13 +95,16 @@ public:
       industrial_calibration::PnPResult pnp_result = industrial_calibration::optimize(pnp_);
       if (!pnp_result.converged) throw std::runtime_error("PnP optimization did not converge");
 
-      // Save to file
       YAML::Node node;
       node["camera_to_target_pos"] = Eigen::Vector3d(pnp_result.camera_to_target.translation());
       node["camera_to_target_rpy"] =
           Eigen::Vector3d(pnp_result.camera_to_target.rotation().eulerAngles(2, 1, 0).reverse());
+
+      // Optionally save result to file
+      std::string output_file;
+      if (pnh_.getParam("output_file", output_file))
       {
-        std::ofstream f("/tmp/pnp.yaml");
+        std::ofstream f(output_file);
         f << node;
       }
 
