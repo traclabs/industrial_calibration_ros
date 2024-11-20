@@ -157,7 +157,7 @@ public:
       if (orientation_diff > orientation_tolerance)
       {
         std::stringstream ss;
-        ss << "Orientation difference exceeds tolerance by " << orientation_diff - orientation_tolerance << " (m)";
+        ss << "Orientation difference exceeds tolerance by " << orientation_diff - orientation_tolerance << " (rad)";
         throw std::runtime_error(ss.str());
       }
 
